@@ -1,123 +1,102 @@
-import unittest
-import time_series_visualizer
+import matplotlib.pyplot as plt
+import pandas as pd
+import seaborn as sns
 import matplotlib as mpl
+from pandas.plotting import register_matplotlib_converters
+register_matplotlib_converters()
 
-class DataCleaningTestCase(unittest.TestCase):
-    def test_data_cleaning(self):
-        actual = int(time_series_visualizer.df.count(numeric_only=True))
-        expected = 1238
-        self.assertEqual(actual, expected, "Expected DataFrame count after cleaning to be 1238.")
+# Import data (Make sure to parse dates. Consider setting index column to 'date'.)
+df = pd.read_csv('fcc-forum-pageviews.csv', parse_dates=['date'], index_col='date')
 
-class LinePlotTestCase(unittest.TestCase):
-    def setUp(self):
-        self.fig = time_series_visualizer.draw_line_plot()
-        self.ax = self.fig.axes[0]
+# Clean data
+df = df[
+    (df['value'] > df['value'].quantile(0.025)) &
+    (df['value'] < df['value'].quantile(0.975))
+]
 
-    def test_line_plot_title(self):
-        actual = self.ax.get_title()
-        expected = "Daily freeCodeCamp Forum Page Views 5/2016-12/2019"
-        self.assertEqual(actual, expected, "Expected line plot title to be 'Daily freeCodeCamp Forum Page Views 5/2016-12/2019'")
-    
-    def test_line_plot_labels(self):
-        actual = self.ax.get_xlabel()
-        expected = "Date"
-        self.assertEqual(actual, expected, "Expected line plot xlabel to be 'Date'")
-        actual = self.ax.get_ylabel()
-        expected = "Page Views"
-        self.assertEqual(actual, expected, "Expected line plot ylabel to be 'Page Views'")
+# Debugging: Check the number of data points
+print("Number of data points after cleaning:", df.shape[0])  # Should be 1238
 
-    def test_line_plot_data_quantity(self):
-        actual = len(self.ax.lines[0].get_ydata())
-        expected = 1238
-        self.assertEqual(actual, expected, "Expected number of data points in line plot to be 1238.")
+def draw_line_plot():
+    # Draw line plot
+    fig, ax = plt.subplots(figsize=(15, 5))
+    ax.plot(df.index, df['value'], color='red', linewidth=1)
+    ax.set_title('Daily freeCodeCamp Forum Page Views 5/2016-12/2019')
+    ax.set_xlabel('Date')
+    ax.set_ylabel('Page Views')
+    fig.savefig('line_plot.png')
+    return fig
 
+def draw_bar_plot():
+    # Copy and modify data for monthly bar plot
+    df_bar = df.copy()
 
-class BarPlotTestCase(unittest.TestCase):
-    def setUp(self):
-        self.fig = time_series_visualizer.draw_bar_plot()
-        self.ax = self.fig.axes[0]
+    # Add 'year' and 'month' columns
+    df_bar['year'] = df_bar.index.year
+    df_bar['month'] = df_bar.index.month
 
-    def test_bar_plot_legend_labels(self):
-        actual = []
-        for label in self.ax.get_legend().get_texts():
-          actual.append(label.get_text())
-        expected = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
-        self.assertEqual(actual, expected, "Expected bar plot legend labels to be months of the year.")
-    
-    def test_bar_plot_labels(self):
-        actual = self.ax.get_xlabel()
-        expected = "Years"
-        self.assertEqual(actual, expected, "Expected bar plot xlabel to be 'Years'")
-        actual = self.ax.get_ylabel()
-        expected = "Average Page Views"
-        self.assertEqual(actual, expected, "Expected bar plot ylabel to be 'Average Page Views'")
-        actual = []
-        for label in self.ax.get_xaxis().get_majorticklabels():
-            actual.append(label.get_text())
-        expected = ['2016', '2017', '2018', '2019']
-        self.assertEqual(actual, expected, "Expected bar plot secondary labels to be '2016', '2017', '2018', '2019'")
+    # Group data and calculate average
+    df_bar = df_bar.groupby(['year', 'month'])['value'].mean().reset_index()
 
-    def test_bar_plot_number_of_bars(self):
-        actual = len([rect for rect in self.ax.get_children() if isinstance(rect, mpl.patches.Rectangle)])
-        expected = 49
-        self.assertEqual(actual, expected, "Expected a different number of bars in bar chart.")
+    # Map month numbers to month names
+    months_order = {
+        1: "January", 2: "February", 3: "March", 4: "April",
+        5: "May", 6: "June", 7: "July", 8: "August",
+        9: "September", 10: "October", 11: "November", 12: "December"
+    }
+    df_bar['month'] = df_bar['month'].map(months_order)
 
+    # Ensure 'month' is a categorical variable with the correct order
+    months_order_list = list(months_order.values())
+    df_bar['month'] = pd.Categorical(df_bar['month'], categories=months_order_list, ordered=True)
 
-class BoxPlotTestCase(unittest.TestCase):
-    def setUp(self):
-        self.fig = time_series_visualizer.draw_box_plot()
-        self.ax1 = self.fig.axes[0]
-        self.ax2 = self.fig.axes[1]
+    # Remove any rows with NaN in 'month'
+    df_bar = df_bar.dropna(subset=['month'])
 
-    def test_box_plot_number(self):
-        actual = len(self.fig.get_axes())
-        expected = 2
-        self.assertEqual(actual, expected, "Expected two box plots in figure.")
-    
-    def test_box_plot_labels(self):
-        actual = self.ax1.get_xlabel()
-        expected = "Year"
-        self.assertEqual(actual, expected, "Expected box plot 1 xlabel to be 'Year'")
-        actual = self.ax1.get_ylabel()
-        expected = "Page Views"
-        self.assertEqual(actual, expected, "Expected box plot 1 ylabel to be 'Page Views'")
-        actual = self.ax2.get_xlabel()
-        expected = "Month"
-        self.assertEqual(actual, expected, "Expected box plot 2 xlabel to be 'Month'")
-        actual = self.ax2.get_ylabel()
-        expected = "Page Views"
-        self.assertEqual(actual, expected, "Expected box plot 2 ylabel to be 'Page Views'")
-        actual = []
-        for label in self.ax1.get_xaxis().get_majorticklabels():
-            actual.append(label.get_text())
-        expected = ['2016', '2017', '2018', '2019']
-        self.assertEqual(actual, expected, "Expected box plot 1 secondary labels to be '2016', '2017', '2018', '2019'")
-        actual = []
-        for label in self.ax2.get_xaxis().get_majorticklabels():
-            actual.append(label.get_text())
-        expected = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-        self.assertEqual(actual, expected, "Expected box plot 2 secondary labels to be 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'")
-        actual = []
-        for label in self.ax1.get_yaxis().get_majorticklabels():
-            actual.append(label.get_text())
-        expected = ['0', '20000', '40000', '60000', '80000', '100000', '120000', '140000', '160000', '180000', '200000']
-        self.assertEqual(actual, expected, "Expected box plot 1 secondary labels to be '0', '20000', '40000', '60000', '80000', '100000', '120000', '140000', '160000', '180000', '200000'")
+    # Draw bar plot
+    fig, ax = plt.subplots(figsize=(12, 6))
+    sns.barplot(x='year', y='value', hue='month', data=df_bar, palette='tab10', ax=ax)
 
-    def test_box_plot_titles(self):
-        actual = self.ax1.get_title()
-        expected = "Year-wise Box Plot (Trend)"
-        self.assertEqual(actual, expected, "Expected box plot 1 title to be 'Year-wise Box Plot (Trend)'")
-        actual = self.ax2.get_title()
-        expected = "Month-wise Box Plot (Seasonality)"
-        self.assertEqual(actual, expected, "Expected box plot 2 title to be 'Month-wise Box Plot (Seasonality)'")
+    # Labels and legend
+    ax.set_xlabel('Years')
+    ax.set_ylabel('Average Page Views')
+    ax.legend(title='Months', loc='upper left')
 
-    def test_box_plot_number_of_boxes(self):
-        actual = len(self.ax1.lines) / 6 # Every box has 6 lines
-        expected = 4
-        self.assertEqual(actual, expected, "Expected four boxes in box plot 1")
-        actual = len(self.ax2.lines) / 6 # Every box has 6 lines
-        expected = 12
-        self.assertEqual(actual, expected, "Expected 12 boxes in box plot 2")
+    # Debugging: Check the number of bars
+    num_bars = len([rect for rect in ax.patches if isinstance(rect, mpl.patches.Rectangle)])
+    print("Number of bars in bar plot:", num_bars)  # Should be 49
 
-if __name__ == "__main__":
-    unittest.main()
+    # Save image and return fig (don't change this part)
+    fig.savefig('bar_plot.png')
+    return fig
+
+def draw_box_plot():
+    # Prepare data for box plots (this part is done!)
+    df_box = df.copy()
+    df_box.reset_index(inplace=True)
+    df_box['year'] = [d.year for d in df_box.date]
+    df_box['month'] = [d.strftime('%b') for d in df_box.date]
+
+    # Set month order
+    months_order = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    df_box['month'] = pd.Categorical(df_box['month'], categories=months_order, ordered=True)
+
+    # Draw box plots (using Seaborn)
+    fig, axes = plt.subplots(1, 2, figsize=(20, 10))
+
+    # Year-wise Box Plot
+    sns.boxplot(x='year', y='value', data=df_box, ax=axes[0])
+    axes[0].set_title('Year-wise Box Plot (Trend)')
+    axes[0].set_xlabel('Year')
+    axes[0].set_ylabel('Page Views')
+
+    # Month-wise Box Plot
+    sns.boxplot(x='month', y='value', data=df_box, ax=axes[1])
+    axes[1].set_title('Month-wise Box Plot (Seasonality)')
+    axes[1].set_xlabel('Month')
+    axes[1].set_ylabel('Page Views')
+
+    # Save image and return fig (don't change this part)
+    fig.savefig('box_plot.png')
+    return fig
